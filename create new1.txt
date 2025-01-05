@@ -1,0 +1,74 @@
+pipeline {
+    agent any
+
+    environment {
+        // Define environment variables for the pipeline
+        MAVEN_HOME = "/usr/share/maven" // Path to Maven
+        JAVA_HOME = "/usr/lib/jvm/java-11-openjdk" // Path to Java
+        PATH = "${JAVA_HOME}/bin:${MAVEN_HOME}/bin:${PATH}"
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                // Checkout the code from Git
+                git branch: 'main', url: 'https://github.com/your-repo/your-project.git'
+            }
+        }
+
+        stage('Compile') {
+            steps {
+                // Compile the project
+                sh 'mvn clean compile'
+            }
+        }
+
+        stage('Unit Test') {
+            steps {
+                // Run unit tests
+                sh 'mvn test'
+            }
+        }
+
+        stage('Package') {
+            steps {
+                // Package the application (WAR/JAR file)
+                sh 'mvn package'
+            }
+
+            post {
+                success {
+                    // Archive the built artifact
+                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                }
+            }
+        }
+
+        stage('Code Quality Analysis') {
+            steps {
+                // Example: Running SonarQube analysis
+                sh 'mvn sonar:sonar -Dsonar.projectKey=your-project -Dsonar.host.url=http://sonar.yourdomain.com -Dsonar.login=your_token'
+            }
+        }
+
+        stage('Deploy to Nexus') {
+            steps {
+                // Deploy the artifact to Nexus repository
+                sh 'mvn deploy -DaltDeploymentRepository=nexus::default::http://nexus.yourdomain.com/repository/maven-releases/'
+            }
+        }
+    }
+
+    post {
+        always {
+            // Clean workspace after build
+            cleanWs()
+        }
+        success {
+            echo "Pipeline completed successfully!"
+        }
+        failure {
+            echo "Pipeline failed. Check logs for details."
+        }
+    }
+}
