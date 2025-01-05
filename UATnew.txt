@@ -1,0 +1,90 @@
+pipeline {
+    agent any
+
+    environment {
+        // Define environment variables
+        APP_NAME = "my-application"
+        UAT_ENV = "uat.example.com"
+        DOCKER_REGISTRY = "mydockerregistry.com"
+        DOCKER_CREDENTIALS = "docker-creds"
+        GIT_BRANCH = "release-branch"
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                echo 'Checking out the code from the Git repository...'
+                checkout([$class: 'GitSCM', branches: [[name: "*/${GIT_BRANCH}"]],
+                          userRemoteConfigs: [[url: 'git@github.com:username/repository.git']]
+                ])
+            }
+        }
+
+        stage('Build Application') {
+            steps {
+                echo 'Building the application...'
+                sh './gradlew build' // Replace with your build command
+            }
+        }
+
+        stage('Run Unit Tests') {
+            steps {
+                echo 'Running unit tests...'
+                sh './gradlew test' // Replace with your test command
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    echo 'Building Docker image...'
+                    sh """
+                        docker build -t ${DOCKER_REGISTRY}/${APP_NAME}:${env.BUILD_ID} .
+                    """
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDENTIALS}",
+                                                  usernameVariable: 'DOCKER_USER',
+                                                  passwordVariable: 'DOCKER_PASS')]) {
+                    sh """
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin ${DOCKER_REGISTRY}
+                        docker push ${DOCKER_REGISTRY}/${APP_NAME}:${env.BUILD_ID}
+                    """
+                }
+            }
+        }
+
+        stage('Deploy to UAT') {
+            steps {
+                echo 'Deploying application to UAT environment...'
+                sh """
+                    kubectl set image deployment/${APP_NAME} ${APP_NAME}=${DOCKER_REGISTRY}/${APP_NAME}:${env.BUILD_ID} --namespace=uat
+                """
+            }
+        }
+
+        stage('Run UAT Tests') {
+            steps {
+                echo 'Running UAT tests...'
+                sh 'npm run uat-tests' // Replace with actual UAT testing command
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Cleaning up workspace...'
+            cleanWs()
+        }
+        success {
+            echo 'UAT pipeline completed successfully!'
+        }
+        failure {
+            echo 'UAT pipeline failed. Please check the logs.'
+        }
+    }
+}
