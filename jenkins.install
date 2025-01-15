@@ -1,0 +1,50 @@
+pipeline {
+    agent any
+    
+    stages {
+        stage('Start') {
+            steps {
+                echo 'Starting pipeline...'
+            }
+        }
+        
+        stage('Update and Fix System') {
+            steps {
+                echo 'Updating package lists and fixing issues'
+                sh '''
+                sudo apt-get update
+                sudo dpkg --configure -a
+                sudo apt-get install -f
+                '''
+            }
+        }
+        
+        stage('Add Jenkins GPG Key and Configure Repo') {
+            steps {
+                echo 'Adding Jenkins GPG key and configuring repository'
+                sh '''
+                sudo mkdir -p /etc/apt/keyrings
+                curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key | sudo tee /etc/apt/keyrings/jenkins.asc
+                echo deb [signed-by=/etc/apt/keyrings/jenkins.asc] https://pkg.jenkins.io/debian-stable binary/ | sudo tee /etc/apt/sources.list.d/jenkins.list
+                sudo apt-get update
+                '''
+            }
+        }
+        
+        stage('Install and Restart Jenkins') {
+            steps {
+                echo 'Installing and restarting Jenkins'
+                sh '''
+                sudo apt-get install -y jenkins
+                sudo systemctl restart jenkins
+                '''
+            }
+        }
+        
+        stage('End') {
+            steps {
+                echo 'Pipeline execution completed.'
+            }
+        }
+    }
+}
